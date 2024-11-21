@@ -39,8 +39,11 @@ def print_info(writer, **kwargs):
     step = kwargs["step"]
     s = ""
     for key, value in kwargs.items():
-        s += f"{key}: {value} | "
-        if key == "step":
+        if key == "dt":
+            s += f"{key}: {value:.2f} ms | "
+        else:
+            s += f"{key}: {value} | "
+        if key == "step" or key == "dt":
             continue
         writer.add_scalar(f"{key}", value, step)
     print(s)
