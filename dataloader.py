@@ -17,7 +17,7 @@ class DataLoaderLite:
         self.process_rank = (process_rank,)
         self.num_processes = num_processes
 
-        with open("input.txt", "r") as f:
+        with open("./data/input.txt", "r") as f:
             text = f.read()
 
         enc = tiktoken.get_encoding("gpt2")
