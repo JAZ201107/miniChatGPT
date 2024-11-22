@@ -14,10 +14,11 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 
 
-# NOTE: should run with `torchrun --standalone --nproc_per_node=2 text.py`
+# NOTE: should run with `torchrun --standalone --nproc_per_node=2 train.py`
 if __name__ == "__main__":
     ddp = int(os.environ.get("RANK", -1)) != -1  # True if DDP is used
     if ddp:
+        destroy_process_group()
         # use of DDP atm demands CUDA, we set the device appropriately according to rank
         assert torch.cuda.is_available(), "for now i think we need CUDA for DDP"
         init_process_group(backend="nccl")
@@ -130,7 +131,7 @@ if __name__ == "__main__":
             with torch.autocast(device_type=device, dtype=torch.bfloat16):
                 logits, loss = model(x, y)
             loss = loss / grad_accum_steps
-            loss_accum += loss.item()
+            loss_accum += loss.detach()
             if ddp:
                 model.require_backward_grad_sync = micro_step == grad_accum_steps - 1
             loss.backward()
