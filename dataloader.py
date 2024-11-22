@@ -14,7 +14,7 @@ class DataLoaderLite:
     ):
         self.B = B
         self.T = T
-        self.process_rank = (process_rank,)
+        self.process_rank = process_rank
         self.num_processes = num_processes
 
         with open("./data/input.txt", "r") as f:
