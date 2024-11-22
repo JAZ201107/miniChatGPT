@@ -6,7 +6,7 @@ from config import GPTConfig
 from utils import seed_everything, get_device, count_parameter, print_info
 from dataloader import DataLoaderLite
 
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter  # type: ignore
 import math
 import os
 from torch.distributed import init_process_group, destroy_process_group
@@ -18,7 +18,6 @@ import torch.distributed as dist
 if __name__ == "__main__":
     ddp = int(os.environ.get("RANK", -1)) != -1  # True if DDP is used
     if ddp:
-        destroy_process_group()
         # use of DDP atm demands CUDA, we set the device appropriately according to rank
         assert torch.cuda.is_available(), "for now i think we need CUDA for DDP"
         init_process_group(backend="nccl")
@@ -46,14 +45,8 @@ if __name__ == "__main__":
             device = "mps"
         print(f"using device: {device}")
 
-    # added after video, pytorch can be serious about it's device vs. device_type distinction
     device_type = "cuda" if device.startswith("cuda") else "cpu"
-
-    torch.manual_seed(1337)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed(1337)
-
-    # device = get_device()
+    seed_everything(1337)
 
     total_batch_size = 524288  # 2**19, ~0.5M, in number of tokens
     B = 64  # micro batch size
@@ -70,14 +63,19 @@ if __name__ == "__main__":
     train_loader = DataLoaderLite(
         B=4,
         T=32,
+        split="train",
         process_rank=ddp_rank,
         num_processes=ddp_world_size,
+        master_process=master_process,
     )
     val_loader = DataLoaderLite(
-        B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="val"
+        B=B,
+        T=T,
+        process_rank=ddp_rank,
+        num_processes=ddp_world_size,
+        split="val",
+        master_process=master_process,
     )
-    # split="train",
-    # master_process=master_process,
 
     config = GPTConfig(vocab_size=50304)
     model = GPT(config).to(device)
