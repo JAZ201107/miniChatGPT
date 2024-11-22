@@ -128,7 +128,7 @@ if __name__ == "__main__":
         for micro_step in range(grad_accum_steps):
             x, y = train_loader.next_batch()
             x, y = x.to(device), y.to(device)
-            with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
                 logits, loss = model(x, y)
             loss = loss / grad_accum_steps
             loss_accum += loss.detach()
