@@ -73,6 +73,9 @@ if __name__ == "__main__":
         process_rank=ddp_rank,
         num_processes=ddp_world_size,
     )
+    val_loader = DataLoaderLite(
+        B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split="val"
+    )
     # split="train",
     # master_process=master_process,
 
@@ -110,19 +113,12 @@ if __name__ == "__main__":
     # Train
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     for step in range(max_steps):
-        # t0 = time.time()
-        # x, y = train_loader.next_batch()
-        # x, y = x.to(device), y.to(device)
-        # optimizer.zero_grad()
-        # with torch.autocast(device_type=device, dtype=torch.bfloat16):
-        #     logits, loss = model(x, y)
-        # loss.backward()
-        # optimizer.step()
-        # torch.cuda.synchronize()
-        # t1 = time.time()
-        # dt = (t1 - t0) * 1000
-        # print_info(writer, step=i, loss=loss.item(), dt=dt)
         t0 = time.time()
+        last_step = step == max_steps - 1
+
+        if step % 250 == 0 or last_step:
+            model.eval()
+            val_loader.reset()
         optimizer.zero_grad()
         loss_accum = 0
         for micro_step in range(grad_accum_steps):
@@ -147,7 +143,7 @@ if __name__ == "__main__":
         optimizer.step()
         torch.cuda.synchronize()
         t1 = time.time()
-        dt = t1 - t0
+        dt = (t1 - t0) * 1000
         token_processed = (
             train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
         )
