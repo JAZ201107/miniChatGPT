@@ -4,7 +4,7 @@ import logging
 
 from model import GPT
 from config import GPTConfig
-from utils import seed_everything, get_device, count_parameter, print_info
+from utils import seed_everything, get_device, count_parameter, print_info, set_logger
 from dataloader import DataLoaderLite
 from optimizer import *
 from decode import generate_sentence
