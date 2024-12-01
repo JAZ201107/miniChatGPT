@@ -92,6 +92,8 @@ if __name__ == "__main__":
         # raw_model = model.module if ddp else model
         model = DDP(model, device_ids=[ddp_local_rank])
 
+    raw_model = model.module if ddp else model
+
     # Train
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     tokenizer = tiktoken.get_encoding("gpt2")
@@ -110,6 +112,19 @@ if __name__ == "__main__":
                 device_type=device_type,
                 ddp_rank=ddp_rank,
             )
+
+        if master_process:
+            if step > 0 and (step % 1000 == 0 or last_step):
+                # optionally write model checkpoints
+                checkpoint_path = os.path.join("model_latest.pt")
+                checkpoint = {
+                    "model": raw_model.state_dict(),
+                }
+                # you might also want to add optimizer.state_dict() and
+                # rng seeds etc., if you wanted to more exactly resume training
+                torch.save(checkpoint, checkpoint_path)
+                print(" => checkpoint saved to", checkpoint_path)
+
         optimizer.zero_grad()
         loss_accum = 0
         model.train()
