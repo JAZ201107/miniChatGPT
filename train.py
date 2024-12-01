@@ -1,11 +1,13 @@
 import torch
 import time
+import logging
 
 from model import GPT
 from config import GPTConfig
 from utils import seed_everything, get_device, count_parameter, print_info
 from dataloader import DataLoaderLite
 from optimizer import *
+from decode import generate_sentence
 
 from torch.utils.tensorboard import SummaryWriter  # type: ignore
 import math
@@ -58,8 +60,8 @@ if __name__ == "__main__":
     grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
 
     if master_process:
-        print(f"total desired batch size: {total_batch_size}")
-        print(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
+        logging.info(f"total desired batch size: {total_batch_size}")
+        logging.info(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
 
     train_loader = DataLoaderLite(
         B=4,
@@ -92,6 +94,8 @@ if __name__ == "__main__":
     # Train
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     for step in range(max_steps):
+        if master_process:
+            print(f"step: {step}/{max_steps}")
         t0 = time.time()
         last_step = step == max_steps - 1
 

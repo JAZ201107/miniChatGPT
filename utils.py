@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import os
 import random
+import logging
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -38,12 +39,39 @@ def print_info(writer, **kwargs):
     step = kwargs["step"]
     s = ""
     for key, value in kwargs.items():
-        if key == "dt":
-            s += f"{key}: {value:.2f} ms | "
+        # if key == "dt":
+        #     s += f"{key}: {value:.2f} ms | "
+        # else:
+        #     s += f"{key}: {value} | "
+        # if key == "step" or key == "dt":
+        #     continue
+        # writer.add_scalar(f"{key}", value, step)
+        if isinstance(value, float):
+            s += f"{key}: {value:.2f} | "
         else:
             s += f"{key}: {value} | "
-        if key == "step" or key == "dt":
+
+        if key == "step" or key == "dt":  # Note write step and dt to tensorboard
             continue
         writer.add_scalar(f"{key}", value, step)
-    print(s)
+
+    logging.info(s)
     return None
+
+
+def set_logger(log_path):
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    if not logger.handlers:
+        # Logging to a file
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s:%(levelname)s: %(message)s")
+        )
+        logger.addHandler(file_handler)
+
+        # Logging to console
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(stream_handler)
