@@ -5,6 +5,7 @@ from model import GPT
 from config import GPTConfig
 from utils import seed_everything, get_device, count_parameter, print_info
 from dataloader import DataLoaderLite
+from optimizer import *
 
 from torch.utils.tensorboard import SummaryWriter  # type: ignore
 import math
@@ -49,13 +50,13 @@ if __name__ == "__main__":
     seed_everything(1337)
 
     total_batch_size = 524288  # 2**19, ~0.5M, in number of tokens
-    B = 64  # micro batch size
+    B = 8  # micro batch size
     T = 1024  # sequence length
-
     assert (
         total_batch_size % (B * T * ddp_world_size) == 0
     ), "make sure total_batch_size is divisible by B * T * ddp_world_size"
     grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
+
     if master_process:
         print(f"total desired batch size: {total_batch_size}")
         print(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
@@ -86,26 +87,6 @@ if __name__ == "__main__":
         # raw_model = model.module if ddp else model
         model = DDP(model, device_ids=[ddp_local_rank])
 
-    max_lr = 6e-4
-    min_lr = max_lr * 0.1
-    warmup_steps = 715
-    max_steps = 19073  # 19,073 steps is ~1 epoch, if data is 10B tokens and batch size 0.5M tokens
-
-    def get_lr(it):
-        # 1) linear warmup for warmup_iters steps
-        if it < warmup_steps:
-            return max_lr * (it + 1) / warmup_steps
-        # 2) if it > lr_decay_iters, return min learning rate
-        if it > max_steps:
-            return min_lr
-        # 3) in between, use cosine decay down to min learning rate
-        decay_ratio = (it - warmup_steps) / (max_steps - warmup_steps)
-        assert 0 <= decay_ratio <= 1
-        coeff = 0.5 * (
-            1.0 + math.cos(math.pi * decay_ratio)
-        )  # coeff starts at 1 and goes to 0
-        return min_lr + coeff * (max_lr - min_lr)
-
     writer = SummaryWriter(log_dir="./Experiment/runs")
 
     # Train
@@ -122,24 +103,36 @@ if __name__ == "__main__":
         for micro_step in range(grad_accum_steps):
             x, y = train_loader.next_batch()
             x, y = x.to(device), y.to(device)
-            with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
+
+            with torch.autocast(
+                device_type=device_type, dtype=torch.bfloat16
+            ):  # Mixed Precision
                 logits, loss = model(x, y)
             loss = loss / grad_accum_steps
             loss_accum += loss.detach()
+
             if ddp:
-                model.require_backward_grad_sync = micro_step == grad_accum_steps - 1
+                model.require_backward_grad_sync = (
+                    micro_step == grad_accum_steps - 1
+                )  # This line tell the model sync until the last micro_step
+
             loss.backward()
 
         if ddp:
-            dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
-        norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            dist.all_reduce(
+                loss_accum, op=dist.ReduceOp.AVG
+            )  # Average the loss across all processes
 
+        norm = torch.nn.utils.clip_grad_norm_(
+            model.parameters(), 1.0
+        )  # Gradient Clipping
+
+        # Learning Scheduler
         lr = get_lr(step)
-        for param_group in optimizer.param_groups:
-            param_group["lr"] = lr
+        update_lr(optimizer, lr)
 
         optimizer.step()
-        torch.cuda.synchronize()
+        torch.cuda.synchronize()  # The CPU just send the task, need wait for the GPU to finish
         t1 = time.time()
         dt = (t1 - t0) * 1000
         token_processed = (
@@ -152,6 +145,5 @@ if __name__ == "__main__":
             )
 
     writer.close()
-
     if ddp:
         destroy_process_group()

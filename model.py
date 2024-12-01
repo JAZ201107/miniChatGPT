@@ -13,9 +13,11 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embed % config.n_head == 0
 
-        self.c_attn = nn.Linear(config.n_embed, config.n_embed * 3)
+        self.c_attn = nn.Linear(
+            config.n_embed, config.n_embed * 3
+        )  # Fused linear projection
         self.c_proj = nn.Linear(config.n_embed, config.n_embed)
-        self.c_proj.NANOGPT_SCALE_INIT = 1  # type: ignore
+        self.c_proj.NANOGPT_SCALE_INIT = 1  # This is for the initialization
 
         self.n_head = config.n_head
         self.n_embed = config.n_embed
@@ -94,7 +96,7 @@ class GPT(nn.Module):
 
         self.lm_head = nn.Linear(config.n_embed, config.vocab_size, bias=False)
 
-        self.transformer.wte.weight = self.lm_head.weight
+        self.transformer.wte.weight = self.lm_head.weight  # Weight Typing
 
         # init params
         self.apply(self._init_weights)
@@ -120,7 +122,7 @@ class GPT(nn.Module):
         pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
         pos_emb = self.transformer.wpe(pos)
         tok_emb = self.transformer.wte(idx)
-        x = tok_emb + pos_emb
+        x = tok_emb + pos_emb  # Get the semantic and positional embeddings
 
         for block in self.transformer.h:
             x = block(x)
@@ -194,33 +196,3 @@ class GPT(nn.Module):
                     sd[k].copy_(sd_hf[k])
 
         return model
-
-    def configure_optimizers(self, weight_decay, learning_rate, device):
-        param_dict = {pn: p for pn, p in self.named_parameters()}
-        param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-
-        decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-        nodeacy_params = [p for n, p in param_dict.items() if p.dim() < 2]
-        optim_groups = [
-            {"params": decay_params, "weight_decay": weight_decay},
-            {"params": nodeacy_params, "weight_decay": 0.0},
-        ]
-
-        num_decay_params = sum(p.numel() for p in decay_params)
-        num_nodeacy_params = sum(p.numel() for p in nodeacy_params)
-
-        print(
-            f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:, } parameters"
-        )
-        print(
-            f"num non-decayed parameter tensors: {len(nodeacy_params)}, with {num_nodeacy_params:, } parameters"
-        )
-
-        # Create AdamW Optimizer
-        fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-        use_fused = fused_available and "cuda" in device
-
-        print(f"using {use_fused} AdamW optimizer")
-        optimizer = torch.optim.AdamW(
-            optim_groups, lr=learning_rate, betas=(0.9, 0.95), eps=1e-8, fused=use_fused
-        )

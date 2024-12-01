@@ -35,7 +35,6 @@ def seed_everything(seed=None):
 
 
 def print_info(writer, **kwargs):
-
     step = kwargs["step"]
     s = ""
     for key, value in kwargs.items():
