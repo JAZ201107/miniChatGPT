@@ -1,6 +1,7 @@
 import torch
 import time
 import logging
+import tiktoken
 
 from model import GPT
 from config import GPTConfig
