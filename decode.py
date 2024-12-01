@@ -13,7 +13,7 @@ def generate_sentence(
     num_return_sequences = 4
     max_length = 32
 
-    tokens = tokenizer.encode(prefix)
+    # tokens = tokenizer.encode(prefix)
     tokens = (
         torch.tensor(tokens, dtype=torch.long)
         .unsqueeze(0)

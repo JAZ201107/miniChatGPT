@@ -60,8 +60,10 @@ if __name__ == "__main__":
     grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
 
     if master_process:
+        set_logger("train.log")
         logging.info(f"total desired batch size: {total_batch_size}")
         logging.info(f"=> calculated gradient accumulation steps: {grad_accum_steps}")
+        writer = SummaryWriter(log_dir="./Experiment/runs")
 
     train_loader = DataLoaderLite(
         B=4,
@@ -89,21 +91,26 @@ if __name__ == "__main__":
         # raw_model = model.module if ddp else model
         model = DDP(model, device_ids=[ddp_local_rank])
 
-    writer = SummaryWriter(log_dir="./Experiment/runs")
-
     # Train
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    tokenizer = tiktoken.get_encoding("gpt2")
     for step in range(max_steps):
         if master_process:
             print(f"step: {step}/{max_steps}")
         t0 = time.time()
         last_step = step == max_steps - 1
 
-        if step % 250 == 0 or last_step:
-            model.eval()
-            val_loader.reset()
+        if (step > 0 and step % 250 == 0) or last_step:
+            generate_sentence(
+                model,
+                tokenizer=tokenizer,
+                device=device,
+                device_type=device_type,
+                ddp_rank=ddp_rank,
+            )
         optimizer.zero_grad()
         loss_accum = 0
+        model.train()
         for micro_step in range(grad_accum_steps):
             x, y = train_loader.next_batch()
             x, y = x.to(device), y.to(device)
