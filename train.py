@@ -95,9 +95,10 @@ if __name__ == "__main__":
     # Train
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     tokenizer = tiktoken.get_encoding("gpt2")
+    if master_process:
+        logging.info(f"Start Training: {max_steps} steps")
+
     for step in range(max_steps):
-        if master_process:
-            print(f"step: {step}/{max_steps}")
         t0 = time.time()
         last_step = step == max_steps - 1
 

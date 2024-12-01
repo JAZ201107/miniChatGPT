@@ -46,7 +46,7 @@ def print_info(writer, **kwargs):
         # if key == "step" or key == "dt":
         #     continue
         # writer.add_scalar(f"{key}", value, step)
-        if isinstance(value, float):
+        if not isinstance(value, int):
             s += f"{key}: {value:.2f} | "
         else:
             s += f"{key}: {value} | "
